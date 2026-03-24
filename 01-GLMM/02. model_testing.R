@@ -13,15 +13,16 @@ library(DHARMa)
 library(emmeans)
 library(broom.mixed)
 library(stringr)
+library(dplyr)
 
 rm(list = ls())
 
 # ------------------
-# 1. Read file
+# 1. Read files
 # ------------------
 long_b123MK <- read_csv("data_processed/batch123MK_long.csv")
 
-long_b123MK <- long_from_csv %>%
+long_b123MK <- long_b123MK %>%
   mutate(
     treatment  = factor(treatment, levels = c("control","0.5","0.7")),
     pond_code  = factor(pond_code, levels = c("C5", setdiff(unique(pond_code), "C5"))),
@@ -29,16 +30,55 @@ long_b123MK <- long_from_csv %>%
     observer   = factor(observer),
     clonal_line = factor(clonal_line)
   )
-
-saveRDS(long_from_csv, "batch123MK_long.rds")
+summary(long_b123MK)
+saveRDS(long_b123MK, "batch123MK_long.rds")
 
 long_b123 <- readRDS("data_processed/batch123_long.rds")
 long_b123MK <- readRDS("data_processed/batch123MK_long.rds")
+long_MK <- readRDS("data_processed/MK_long.rds")
 
 # treatment and ponds : fixed effect variables
 # clonal line, date, observer : random effect variables
 
+# just batch 3
+long_b3 <- read_csv("data_processed/batch3_long.csv")
 
+long_b3 <- long_b3 %>%
+  mutate(
+    treatment  = factor(treatment, levels = c("control","0.5","0.7")),
+    pond_code  = factor(pond_code, levels = c("C5", setdiff(unique(pond_code), "C5"))),
+    pond_type  = factor(pond_type, levels = c("natu","agri","city")),
+    observer   = factor(observer),
+    clonal_line = factor(clonal_line)
+  )
+saveRDS(long_b3, "batch3_long.rds")
+
+# just batch 1 and 2
+long_b12 <- read_csv("data_processed/batch12_long.csv")
+
+long_b12 <- long_b12 %>%
+  mutate(
+    treatment  = factor(treatment, levels = c("control","0.5","0.7")),
+    pond_code  = factor(pond_code, levels = c("C5", setdiff(unique(pond_code), "C5"))),
+    pond_type  = factor(pond_type, levels = c("natu","agri","city")),
+    observer   = factor(observer),
+    clonal_line = factor(clonal_line)
+  )
+saveRDS(long_b12, "batch12_long.rds")
+
+# just the MK 
+long_MK <- read_csv("data_processed/matkris_processed.csv")
+
+long_MK <- long_MK %>%
+  mutate(
+    treatment  = factor(treatment, levels = c("control","0.5","0.7")),
+    pond_code  = factor(pond_code, levels = c("C5", setdiff(unique(pond_code), "C5"))),
+    pond_type  = factor(pond_type, levels = c("natu","agri","city")),
+    observer   = factor(observer),
+    clonal_line = factor(clonal_line)
+  )
+saveRDS(long_MK, "MK_long.rds")
+  
 # =====================================
 #  OVERALL WINNERS: Binomial GLMM + OLRE
 # =====================================
@@ -63,7 +103,7 @@ m_olre_b123 <- glmmTMB(
   family = binomial(link = "logit"),
   data = long_b123_olre
 )
-AIC(m_beta_b123MK, m_olre_b123MK, mnoOb_beta_b123, mnoOb_olre_b123)
+AIC(m_beta_b123MK, m_olre_b123MK, mnoOb_beta_b123, m_olre_b123)
 
 
 # =====================================
@@ -277,12 +317,14 @@ AIC(m_beta_b123MK, m_olre_b123MK, mnoOb_beta_b123, m_olre_b123)
 # -------------------------
 # Alex + MK
 mnoOb_olre_b123MK <- glmmTMB(
-  cbind(alive, dead) ~ treatment + pond_code +
+  cbind(alive, dead) ~ treatment * pond_code +
     (1 | clonal_line) + (1 | date) + (1 | obs_id),
   family = binomial(link = "logit"),
   data = long_b123MK_olre
 )
 AIC(m_olre_b123MK, mnoOb_olre_b123MK)
+
+# Result: the observer is important for the combined dataset!!
 
 # -------------------------
 # INTERACTION pond*treatment 
@@ -294,13 +336,13 @@ AIC(m_olre_b123MK, mnoOb_olre_b123MK)
 mPTInter_b123MK <- glmmTMB(
   cbind(alive, dead) ~ treatment * pond_code +
     (1 | clonal_line) + (1 | date) + (1 | observer) + (1 | obs_id),
-  family = binomial,
+  family = binomial(link = "logit"),
   data = long_b123MK_olre
 )
 mPT_b123MK <- glmmTMB(
   cbind(alive, dead) ~ treatment + pond_code +
     (1 | clonal_line) + (1 | date) + (1 | observer) + (1 | obs_id),
-  family = binomial,
+  family = binomial(link = "logit"),
   data = long_b123MK_olre
 )
 AIC(mPT_b123MK, mPTInter_b123MK)
@@ -321,6 +363,54 @@ AIC(mTP_olre_b123, mTPInter_olre_b123)
 
 # Result: It is in both cases BETTER WITH INTERACTION BETWEEN POND*TREATMENT !!!
 # !!!
+
+# =====================================
+#  Check for only MK or b3
+# =====================================
+summary(long_MK)
+long_MK_olre <- long_MK %>% mutate(obs_id = factor(row_number()))
+summary(long_MK_olre)
+
+# MK
+m_MK <- glmmTMB(
+  cbind(alive, dead) ~ treatment * pond_code +
+    (1 | clonal_line) + (1 | date) + (1 | observer) + (1 | obs_id),
+  family = binomial(link = "logit"),
+  data = long_MK_olre
+)
+mnoOb_MK <- glmmTMB(
+  cbind(alive, dead) ~ treatment * pond_code +
+    (1 | clonal_line) + (1 | date)  + (1 | obs_id),
+  family = binomial(link = "logit"),
+  data = long_MK_olre
+)
+mnoInt_MK <- glmmTMB(
+  cbind(alive, dead) ~ treatment + pond_code +
+    (1 | clonal_line) + (1 | date)  + (1 | observer)  + (1 | obs_id),
+  family = binomial(link = "logit"),
+  data = long_MK_olre
+)
+AIC(m_MK, mnoOb_MK, mnoInt_MK)
+# RESULT: the MK alone needs simpler model (NO interaction pond x treatment)
+
+# b3
+long_b3
+long_b3_olre <- long_b3 %>% mutate(obs_id = factor(row_number()))
+summary(long_b3)
+m_b3 <- glmmTMB(
+  cbind(alive, dead) ~ treatment * pond_code +
+    (1 | clonal_line) + (1 | date) + (1 | observer) + (1 | obs_id),
+  family = binomial(link = "logit"),
+  data = long_b3_olre
+)
+mnoOb_b3 <- glmmTMB(
+  cbind(alive, dead) ~ treatment * pond_code +
+    (1 | clonal_line) + (1 | date)  + (1 | obs_id),
+  family = binomial(link = "logit"),
+  data = long_b3_olre
+)
+AIC(m_b3, mnoOb_b3)
+#RESULT: the b3 alone can handle the complex model (with interaction)
 
 # =====================================
 # DHARMA TESTS
